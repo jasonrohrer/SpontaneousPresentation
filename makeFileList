@@ -15,6 +15,7 @@ ROOT_PATH = ..
 
 LAYER_SOURCE = \
 RunPresentation.cpp \
+slides.cpp \
 
 
 
@@ -72,4 +73,6 @@ NEEDED_MINOR_GEMS_OBJECTS = \
  ${DIFF_BUNDLE_CLIENT_O} \
  ${STRING_TREE_O} \
  ${CRC32_O} \
+ ${PNG_IMAGE_CONVERTER_0} \
+ ${JPG_IMAGE_CONVERTER_0} \
 

@@ -1,5 +1,38 @@
 #include "minorGems/game/game.h"
+#include "minorGems/game/Font.h"
 #include "minorGems/util/stringUtils.h"
+
+#include "slides.h"
+
+
+
+Font *mainFont;
+
+char initDone = false;
+
+
+// position of view in world
+doublePair lastScreenViewCenter = {0, 0 };
+
+
+
+// world width of one view
+double viewWidth = 1280;
+double viewHeight = 720;
+
+
+// this is the desired visible width
+// if our screen is wider than this (wider than 16:9 aspect ratio)
+// then we will put letterbox bars on the sides
+// Usually, if screen is not 16:9, it will be taller, not wider,
+// and we will put letterbox bars on the top and bottom 
+double visibleViewWidth = viewWidth;
+
+
+
+// fraction of viewWidth visible vertically (aspect ratio)
+double viewHeightFraction;
+
 
 
 
@@ -69,16 +102,82 @@ const char *getFontTGAFileName() {
     }
 
 
+
+
 void drawString( const char *inString, char inForceCenter ) {
+    setDrawColor( 1, 1, 1, 0.75 );
+        
+    doublePair messagePos = lastScreenViewCenter;
+
+    TextAlignment align = alignCenter;
+    
+    if( initDone && !inForceCenter ) {
+        // transparent message
+        setDrawColor( 1, 1, 1, 0.75 );
+
+        // stick messages in corner
+        messagePos.x -= viewWidth / 2;
+        
+        messagePos.x +=  20;
+    
+
+    
+        messagePos.y += (viewWidth * viewHeightFraction) /  2;
+    
+        messagePos.y -= 32;
+
+        align = alignLeft;
+        }
+    else {
+        // fully opaque message
+        setDrawColor( 1, 1, 1, 1 );
+
+        // leave centered
+        }
+    
+
+    int numLines;
+    
+    char **lines = split( inString, "\n", &numLines );
+    
+    for( int i=0; i<numLines; i++ ) {
+        
+
+        mainFont->drawString( lines[i], messagePos, align );
+        messagePos.y -= 32;
+        
+        delete [] lines[i];
+        }
+    delete [] lines;
     }
 
 
 
 void initDrawString( int inWidth, int inHeight ) {
+    toggleLinearMagFilter( true );
+    toggleMipMapMinFilter( false );
+    toggleTransparentCropping( true );
+    
+    mainFont = new Font( getFontTGAFileName(), 6, 16, false, 16 );
+    
+    setViewCenterPosition( lastScreenViewCenter.x, lastScreenViewCenter.y );
+
+    viewHeightFraction = inHeight / (double)inWidth;
+    
+    if( viewHeightFraction < 9.0 / 16.0 ) {
+        // weird, wider than 16:9 aspect ratio
+        
+        viewWidth = viewHeight / viewHeightFraction;
+        }
+    
+
+    setViewSize( viewWidth );
+    setLetterbox( visibleViewWidth, viewHeight );
     }
 
 
 void freeDrawString() {
+    delete mainFont;
     }
 
 
@@ -102,14 +201,35 @@ const char *getDemoCodeServerURL() {
 void initFrameDrawer( int inWidth, int inHeight, int inTargetFrameRate,
                       const char *inCustomRecordedGameData,
                       char inPlayingBack ) {
+    
+    setViewCenterPosition( lastScreenViewCenter.x, lastScreenViewCenter.y );
+
+    viewHeightFraction = inHeight / (double)inWidth;
+    
+    if( viewHeightFraction < 9.0 / 16.0 ) {
+        // weird, wider than 16:9 aspect ratio
+        
+        viewWidth = viewHeight / viewHeightFraction;
+        }
+    
+
+    setViewSize( viewWidth );
+    setLetterbox( visibleViewWidth, viewHeight );
+
+    initSlides();
+    initDone = true;
     }
+
 
 
 void freeFrameDrawer() {
+    freeSlides();
     }
 
 
+
 void drawFrame( char inUpdate ) {
+    drawCurrentSlide( viewWidth, viewHeight );
     }
 
 
