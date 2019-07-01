@@ -237,6 +237,20 @@ class SlidePageGenerator : public PageGenerator {
                 return stringDuplicate( "text/html" );
                 }
             }
+
+
+
+        virtual int getCacheMaxAge( char *inGetRequestPath ) {
+            if( strstr( inGetRequestPath, ".jpg" ) != NULL ) {
+                return 3600 * 2;
+                }
+            else if( strstr( inGetRequestPath, ".png" ) != NULL ) {
+                return 3600 * 2;
+                }
+            else {
+                return 0;
+                }
+            }
         
     };
     
