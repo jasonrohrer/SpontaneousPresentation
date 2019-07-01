@@ -98,13 +98,14 @@ char *getHashSalt() {
 
 
 const char *getFontTGAFileName() {
-    return "font_32_34.tga";
+    return "font_32_64.tga";
     }
 
 
 
 
 void drawString( const char *inString, char inForceCenter ) {
+
     setDrawColor( 1, 1, 1, 0.75 );
         
     doublePair messagePos = lastScreenViewCenter;
