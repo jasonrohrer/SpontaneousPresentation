@@ -27,6 +27,7 @@ typedef struct SlideImage {
         File *thumbFile;
         SpriteHandle sprite;
         int w, h;
+        char pixelArt;
     } SlideImage;
 
     
@@ -61,8 +62,6 @@ void initSlides() {
             image = converter.deformatImage( &stream );
             }
         
-        delete [] name;
-        
         
         if( image != NULL ) {    
             SlideImage s;
@@ -72,11 +71,19 @@ void initSlides() {
             s.w = image->getWidth();
             s.h = image->getHeight();
             
+            s.pixelArt = false;
+            
+            if( strstr( name, "_pixels" ) != NULL ) {
+                s.pixelArt = true;
+                }
+
             delete image;
             
             slides.push_back( s );
             }
         
+        delete [] name;
+
         delete f;
         }
     
@@ -104,29 +111,13 @@ void drawCurrentSlide( double viewWidth, double viewHeight ) {
     if( slides.size() > nextSlideNumber ) {
         SlideImage s = slides.getElementDirect( nextSlideNumber );
 
+        toggleLinearMagFilter( ! s.pixelArt );
+
         setDrawColor( 1, 1, 1, 1 );
         
         doublePair pos = { 0, 0 };
 
         double zoom = 1.0;
-        
-        /*
-        if( s.w / viewWidth < 1 &&
-            s.h / viewHeight < 1 ) {
-            // zoom in
-            if( s.w / viewWidth > s.h / viewHeight ) {
-                zoom = s.w / viewWidth;
-                }
-            else {
-                zoom = viewHeight / s.h;
-                }
-            }
-        else {
-            // image too big for screen
-            // zoom out
-            
-            }
-        */
 
         if( s.w / viewWidth > s.h / viewHeight ) {
             zoom = viewWidth / s.w;
