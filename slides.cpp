@@ -9,7 +9,7 @@
 #include "minorGems/graphics/converters/JPEGImageConverter.h"
 
 
-static int nextSlideNumber = 0;
+static int nextSlideID = 0;
 
 static double slideStartTime;
 
@@ -85,28 +85,141 @@ class SlidePageGenerator : public PageGenerator {
                 sscanf( inGetRequestPath, "/%d", &newID );
                 
                 if( newID != -1 ) {
-                    nextSlideNumber = newID;
+                    nextSlideID = newID;
                     }
 
+                int numSlides = slides.size();
+                
+                int w = ceil( sqrt( numSlides ) );
+                
+                int h = ceil( numSlides / (double) w );
+                
+                int cellPadding = 10;
+                
+                int imBorder = 10;
+                
+
+                int webW = SettingsManager::getIntSetting( "webWidth", 1280 );
+                int webH = SettingsManager::getIntSetting( "webHeight", 720 );
+                
+
+                int imageMaxW = webW / w;
+                int imageMaxH = webH / h;
+                
+                imageMaxW -= 2 * ( cellPadding + imBorder );
+                imageMaxH -= 2 * ( cellPadding + imBorder );
+
+                inOutputStream->writeString( "<html><body bgcolor=black>" );
+                inOutputStream->writeString( "<center>" );
+
+                char *tableString = autoSprintf( "<table border = 1 "
+                                                 "cellspacing=0 cellpadding=%d "
+                                                 "width=%d height=%d>\n",
+                                                 cellPadding, webW, webH );
+                
+                inOutputStream->writeString( tableString );
+                delete [] tableString;
+
+                inOutputStream->writeString( "<tr>\n" );
+
+                int rowCount = 0;
+                
                 for( int i=0; i<slides.size(); i++ ) {
                     SlideImage s = slides.getElementDirect( i );
                     
+                    int thisW = s.w;
+                    int thisH = s.h;
+                    
+
+                    if( thisW > imageMaxW ) {
+                        float scale = imageMaxW / (float)thisW;
+                        thisW = imageMaxW;
+                        
+                        thisH *= scale;
+                        }
+                    if( thisH > imageMaxH ) {
+                        float scale = imageMaxH / (float)thisH;
+                        thisH = imageMaxH;
+                        
+                        thisW *= scale;
+                        }
+                    
+                    if( thisH < imageMaxH && thisW < imageMaxW ) {
+                        if( thisH / (float)imageMaxH > 
+                            thisW / (float)imageMaxW ) {
+                            
+                            float scale = imageMaxH / (float)thisH;
+                            thisH = imageMaxH;
+                            
+                            thisW *= scale;
+                            }
+                        else {
+                            float scale = imageMaxW / (float)thisW;
+                            thisW = imageMaxW;
+                            
+                            thisH *= scale;
+                            }
+                        }
+                    
+                    
+
                     const char *ext = ".png";
                     
                     if( s.isJPEG ) {
                         ext = ".jpg";
                         }
+                    
+                    const char *style = "";
+                    
+                    if( s.pixelArt ) {
+                        style = 
+                            "image-rendering: pixelated; "
+                            "image-rendering: -moz-crisp-edges;"
+                            "image-rendering: crisp-edges; ";
+                        }
+                    
+                    
+                    char *borderStyle = autoSprintf( "border:%dpx solid black;",
+                                                     imBorder );
+                    
+
+                    if( s.id == nextSlideID ) {
+                        delete [] borderStyle;
+                        
+                        borderStyle = autoSprintf( "border:%dpx dashed yellow;",
+                                                   imBorder );
+                        }
+                    
+                    
 
                     char *line =
-                        autoSprintf( "<a href=%d>"
-                                     "<img src=%d%s width=200 height=200>"
-                                     "</a><br>", s.id, s.id, ext );
+                        autoSprintf( "<td align=center valign=middle>"
+                                     "<a href=%d>"
+                                     "<img src=%d%s width=%d height=%d"
+                                     " style='%s %s' "
+                                     ">"
+                                     "</a></td>\n", //wFraction, hFraction, 
+                                     s.id, s.id, ext,
+                                     thisW, thisH, style, borderStyle );
                     inOutputStream->writeString( line );
                     delete [] line;
+                    delete [] borderStyle;
+                    
+                    rowCount ++;
+                    
+                    if( rowCount >= w ) {
+                        inOutputStream->writeString( "</tr>\n\n<tr>" );
+                        rowCount = 0;
+                        }
                     }
+                inOutputStream->writeString( "</tr>\n" );
+                inOutputStream->writeString( "</table>" );
 
+                inOutputStream->writeString( "</center>" );
+                inOutputStream->writeString( "</body>" );
+                inOutputStream->writeString( "</html>" );
                 }
-}
+            }
 
 
         
@@ -213,10 +326,10 @@ void freeSlides() {
 
 void drawCurrentSlide( double viewWidth, double viewHeight ) {
     
-    if( slides.size() > nextSlideNumber ) {
-        SlideImage s = slides.getElementDirect( nextSlideNumber );
-
-        toggleLinearMagFilter( ! s.pixelArt );
+    SlideImage *s = getSlideByID( nextSlideID );
+    
+    if( s != NULL ) {
+        toggleLinearMagFilter( ! s->pixelArt );
 
         setDrawColor( 1, 1, 1, 1 );
         
@@ -224,27 +337,16 @@ void drawCurrentSlide( double viewWidth, double viewHeight ) {
 
         double zoom = 1.0;
 
-        if( s.w / viewWidth > s.h / viewHeight ) {
-            zoom = viewWidth / s.w;
+        if( s->w / viewWidth > s->h / viewHeight ) {
+            zoom = viewWidth / s->w;
             }
         else {
-            zoom = viewHeight / s.h;
+            zoom = viewHeight / s->h;
             }
         
         
-        drawSprite( s.sprite, pos, zoom );
+        drawSprite( s->sprite, pos, zoom );
         }
 
-    
-    if( false && 
-        game_getCurrentTime() - slideStartTime > 3 ) {
-        slideStartTime = game_getCurrentTime();
-        
-        nextSlideNumber++;
-        
-        if( nextSlideNumber >= slides.size() ) {
-            nextSlideNumber = 0;
-            }
-        }
     }
 

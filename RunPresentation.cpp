@@ -230,6 +230,7 @@ void freeFrameDrawer() {
 
 
 void drawFrame( char inUpdate ) {
+    wakeUpPauseFrameRate();
     drawCurrentSlide( viewWidth, viewHeight );
     }
 
