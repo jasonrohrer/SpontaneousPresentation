@@ -94,9 +94,10 @@ class SlidePageGenerator : public PageGenerator {
                 
                 int h = ceil( numSlides / (double) w );
                 
-                int cellPadding = 10;
+                int cellPadding = 0;
                 
-                int imBorder = 10;
+                int imBorder = 
+                    SettingsManager::getIntSetting( "imageBorderWidth", 10 );
                 
 
                 int webW = SettingsManager::getIntSetting( "webWidth", 1280 );
