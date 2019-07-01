@@ -1,6 +1,7 @@
 #include "slides.h"
 #include "minorGems/network/web/server/WebServer.h"
 #include "minorGems/util/SimpleVector.h"
+#include "minorGems/util/SettingsManager.h"
 #include "minorGems/game/gameGraphics.h"
 #include "minorGems/game/game.h"
 
@@ -16,28 +17,121 @@ static double slideStartTime;
 
 static File slidesDir( NULL, "slides" );
 
-static File thumbsDir( NULL, "slideThumbs" );
-
 
 static WebServer *server;
 
 
 typedef struct SlideImage {
         int id;
-        File *thumbFile;
+        File *sourceFile;
         SpriteHandle sprite;
         int w, h;
         char pixelArt;
+        
+        // or PNG
+        char isJPEG;
     } SlideImage;
 
     
 SimpleVector<SlideImage> slides;
 
 
+SlideImage *getSlideByID( int inID ) {
+    for( int i=0; i<slides.size(); i++ ) {
+        SlideImage *s = slides.getElement( i );
+        
+        if( s->id == inID ) {
+            return s;
+            }
+        }
+    return NULL;
+    }
+
+
+
+
+class SlidePageGenerator : public PageGenerator {
+    public:
+        
+
+
+        virtual void generatePage( char *inGetRequestPath,
+                                   OutputStream *inOutputStream ) {
+
+            printf( "Get request for %s\n", inGetRequestPath );
+
+
+            // serve images?
+            if( strstr( inGetRequestPath, ".jpg" ) != NULL ||
+                strstr( inGetRequestPath, ".png" ) != NULL ) {
+                int id = 0;
+                sscanf( inGetRequestPath, "/%d.", &id );
+                
+                SlideImage *s = getSlideByID( id );
+                
+                if( s != NULL ) {
+                    int fileLen;
+                    unsigned char *fileCont = 
+                        s->sourceFile->readFileContents( &fileLen );
+                    inOutputStream->write( fileCont, fileLen );
+                    delete [] fileCont;
+                    }
+                }
+            else {
+                // server index
+                
+                int newID = -1;
+                
+                sscanf( inGetRequestPath, "/%d", &newID );
+                
+                if( newID != -1 ) {
+                    nextSlideNumber = newID;
+                    }
+
+                for( int i=0; i<slides.size(); i++ ) {
+                    SlideImage s = slides.getElementDirect( i );
+                    
+                    const char *ext = ".png";
+                    
+                    if( s.isJPEG ) {
+                        ext = ".jpg";
+                        }
+
+                    char *line =
+                        autoSprintf( "<a href=%d>"
+                                     "<img src=%d%s width=200 height=200>"
+                                     "</a><br>", s.id, s.id, ext );
+                    inOutputStream->writeString( line );
+                    delete [] line;
+                    }
+
+                }
+}
+
+
+        
+        virtual char *getMimeType( char *inGetRequestPath ) {            
+
+            if( strstr( inGetRequestPath, ".jpg" ) != NULL ) {
+                return stringDuplicate( "image/jpeg" );
+                }
+            else if( strstr( inGetRequestPath, ".png" ) != NULL ) {
+                return stringDuplicate( "image/png" );
+                }
+            else {
+                // text?
+                return stringDuplicate( "text/html" );
+                }
+            }
+        
+    };
+    
+
+
 
 
 void initSlides() {
-    // make thumbs
+    
     int numFiles;
     File **childFiles = slidesDir.getChildFiles( &numFiles );
 
@@ -52,7 +146,9 @@ void initSlides() {
         Image *image = NULL;
 
         printf( "Opening file %s\n", name );
-
+        
+        char isJPEG = false;
+        
         if( strstr( name, ".png" ) != NULL ) {
             PNGImageConverter converter;    
             image = converter.deformatImage( &stream );
@@ -60,18 +156,20 @@ void initSlides() {
         else if( strstr( name, ".jpg" ) != NULL ) {
             JPEGImageConverter converter( 90 );
             image = converter.deformatImage( &stream );
+            isJPEG = true;
             }
         
         
         if( image != NULL ) {    
             SlideImage s;
             s.id = i;
-            s.thumbFile = NULL;
+            s.sourceFile = f;
             s.sprite = fillSprite( image, false );
             s.w = image->getWidth();
             s.h = image->getHeight();
             
             s.pixelArt = false;
+            s.isJPEG = isJPEG;
             
             if( strstr( name, "_pixels" ) != NULL ) {
                 s.pixelArt = true;
@@ -83,11 +181,15 @@ void initSlides() {
             }
         
         delete [] name;
-
-        delete f;
         }
     
     delete [] childFiles;
+
+    
+    int port = SettingsManager::getIntSetting( "port", 8080 );
+
+    server = new WebServer( port, new SlidePageGenerator() );
+    
 
     slideStartTime = game_getCurrentTime();
     }
@@ -97,9 +199,12 @@ void initSlides() {
 void freeSlides() {
     for( int i=0; i<slides.size(); i++ ) {
         SlideImage s = slides.getElementDirect( i );
+        delete s.sourceFile;
         freeSprite( s.sprite );
         }
     slides.deleteAll();
+
+    delete server;
     }
 
 
@@ -130,7 +235,9 @@ void drawCurrentSlide( double viewWidth, double viewHeight ) {
         drawSprite( s.sprite, pos, zoom );
         }
 
-    if( game_getCurrentTime() - slideStartTime > 3 ) {
+    
+    if( false && 
+        game_getCurrentTime() - slideStartTime > 3 ) {
         slideStartTime = game_getCurrentTime();
         
         nextSlideNumber++;
