@@ -1,5 +1,5 @@
 # SpontaneousPresentation
-A tool for giving on-the-spot non-linear presentations with visuals
+A tool for giving on-the-spot non-linear presentations with visuals.
 
 Easiest to build on Linux, but also possible on Mac and Windows (MinGW) with scome fiddling.
 
