@@ -20,6 +20,8 @@ make
 
 Drop whatever slides (PNG or JPG) into the "slides" folder.  Add "_pixels" to the name of a file to use sharp-pixel scaling (useful for pixel art screen shots).
 
+You can use one level of sub-folders to futher organize slides.
+
 
 #### Run like this:
 ```

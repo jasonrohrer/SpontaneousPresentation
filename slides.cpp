@@ -11,6 +11,9 @@
 
 static int nextSlideID = 0;
 
+static int curFolderID = -1;
+
+
 static double slideStartTime;
 
 
@@ -23,6 +26,9 @@ static WebServer *server;
 
 typedef struct SlideImage {
         int id;
+        // -1 if in top folder
+        int folderID;
+        
         File *sourceFile;
         SpriteHandle sprite;
         int w, h;
@@ -34,6 +40,23 @@ typedef struct SlideImage {
 
     
 SimpleVector<SlideImage> slides;
+
+typedef struct SubFolder {
+        int id;
+        char *name;
+    } SubFolder;
+
+SimpleVector<SubFolder> folders;
+
+
+typedef struct FolderOrImage {
+        SubFolder *f;
+        SlideImage *im;
+    } FolderOrImage;
+
+
+
+    
 
 
 SlideImage *getSlideByID( int inID ) {
@@ -62,7 +85,32 @@ class SlidePageGenerator : public PageGenerator {
 
 
             // serve images?
-            if( strstr( inGetRequestPath, ".jpg" ) != NULL ||
+            if( strstr( inGetRequestPath, "subFolder_pixels.png" ) != NULL ) {
+                File iconFile( NULL, "subFolder_pixels.png" );
+                
+                if( iconFile.exists() ) {
+                    int fileLen;
+                
+                    unsigned char *fileCont = 
+                        iconFile.readFileContents( &fileLen );
+                    inOutputStream->write( fileCont, fileLen );
+                    delete [] fileCont;
+                    }
+                }
+            else if( strstr( inGetRequestPath, 
+                             "parentFolder_pixels.png" ) != NULL ) {
+                File iconFile( NULL, "parentFolder_pixels.png" );
+                
+                if( iconFile.exists() ) {
+                    int fileLen;
+                
+                    unsigned char *fileCont = 
+                        iconFile.readFileContents( &fileLen );
+                    inOutputStream->write( fileCont, fileLen );
+                    delete [] fileCont;
+                    }
+                }
+            else if( strstr( inGetRequestPath, ".jpg" ) != NULL ||
                 strstr( inGetRequestPath, ".png" ) != NULL ) {
                 int id = 0;
                 sscanf( inGetRequestPath, "/%d.", &id );
@@ -79,17 +127,70 @@ class SlidePageGenerator : public PageGenerator {
                 }
             else {
                 // server index
-                
-                int newID = -1;
-                
-                sscanf( inGetRequestPath, "/%d", &newID );
-                
-                if( newID != -1 ) {
-                    nextSlideID = newID;
-                    }
 
-                int numSlides = slides.size();
+                if( strstr( inGetRequestPath, "/folder_" ) != NULL ) {
+                    // switching sub-folder
+                    sscanf( inGetRequestPath, "/folder_%d", &curFolderID );
+                    }
+                else {    
+                    int newID = -1;
+                    
+                    sscanf( inGetRequestPath, "/%d", &newID );
+                    
+                    if( newID != -1 ) {
+                        nextSlideID = newID;
+                        }
+                    }
                 
+                printf( "curFolderID=%d\n", curFolderID );
+
+                SimpleVector<FolderOrImage> drawList;
+
+                SubFolder parentFolder = { -1, (char*)"up" };
+                if( curFolderID != -1 ) {
+                    // down in a sub folder
+                    // put a link up and out
+                
+                    // BUT only if there are some slides in parent folder
+                    // (if not, no point in navigating out)
+                    int parentFolderSlideCount = 0;
+                    
+                    for( int i=0; i<slides.size(); i++ ) {
+                        SlideImage *s = slides.getElement( i );
+                        if( s->folderID == -1 ) {
+                            parentFolderSlideCount++;
+                            }
+                        }
+                    
+                    if( parentFolderSlideCount > 0 ) {
+                        FolderOrImage p;
+                        p.f = &parentFolder;
+                        p.im = NULL;
+                        drawList.push_back( p );
+                        }
+                    }
+                
+                    
+                for( int i=0; i<folders.size(); i++ ) {
+                    FolderOrImage p;
+                    p.f = folders.getElement( i );
+                    p.im = NULL;
+                    drawList.push_back( p );
+                    }
+                
+                for( int i=0; i<slides.size(); i++ ) {
+                    SlideImage *s = slides.getElement( i );
+                    if( s->folderID == curFolderID ) {
+                        FolderOrImage p;
+                        p.f = NULL;
+                        p.im = s;
+                        drawList.push_back( p );
+                        }
+                    }
+                
+                int numSlides = drawList.size();
+                
+
                 int w = ceil( sqrt( numSlides ) );
                 
                 int h = ceil( numSlides / (double) w );
@@ -110,7 +211,9 @@ class SlidePageGenerator : public PageGenerator {
                 imageMaxW -= 2 * ( cellPadding + imBorder );
                 imageMaxH -= 2 * ( cellPadding + imBorder );
 
-                inOutputStream->writeString( "<html><body bgcolor=black>" );
+                inOutputStream->writeString( 
+                    "<html><body bgcolor=black "
+                    "link=white alink=yellow vlink=white>" );
                 inOutputStream->writeString( "<center>" );
 
                 char *tableString = autoSprintf( "<table border = 1 "
@@ -125,9 +228,27 @@ class SlidePageGenerator : public PageGenerator {
 
                 int rowCount = 0;
                 
-                for( int i=0; i<slides.size(); i++ ) {
-                    SlideImage s = slides.getElementDirect( i );
+                for( int i=0; i<drawList.size(); i++ ) {
+                    FolderOrImage d = drawList.getElementDirect( i );
                     
+                    SlideImage s;
+                    
+                    if( d.im != NULL ) {
+                        s = *( d.im );
+                        }
+                    else {
+                        // a sub-folder
+                        // make a fake image
+
+                        s.id = -1;
+                        s.folderID = d.f->id;
+                        s.w = 32;
+                        s.h = 32;
+                        s.pixelArt = true;
+                        s.isJPEG = false;
+                        }    
+
+
                     int thisW = s.w;
                     int thisH = s.h;
                     
@@ -184,24 +305,56 @@ class SlidePageGenerator : public PageGenerator {
                                                      imBorder );
                     
 
-                    if( s.id == nextSlideID ) {
+                    if( s.id == nextSlideID ||
+                        ( s.id == -1 &&
+                          s.folderID == curFolderID ) ) {
                         delete [] borderStyle;
                         
                         borderStyle = autoSprintf( "border:%dpx dashed yellow;",
                                                    imBorder );
                         }
-                    
+                        
                     
 
-                    char *line =
-                        autoSprintf( "<td align=center valign=middle>"
-                                     "<a href=%d>"
-                                     "<img src=%d%s width=%d height=%d"
-                                     " style='%s %s' "
-                                     ">"
-                                     "</a></td>\n", //wFraction, hFraction, 
-                                     s.id, s.id, ext,
-                                     thisW, thisH, style, borderStyle );
+                    char *line;
+                    
+                    if( s.id != -1 ) {
+                        // a real slide image
+                        line = autoSprintf( "<td align=center valign=middle>"
+                                            "<a href=%d>"
+                                            "<img src=%d%s width=%d height=%d"
+                                            " style='%s %s' "
+                                            ">"
+                                            "</a></td>\n", 
+                                            s.id, s.id, ext,
+                                            thisW, thisH, style, borderStyle );
+                        }
+                    else if( s.folderID == -1 ) {
+                        // a parent folder link
+                        line = autoSprintf( "<td align=center valign=middle>"
+                                            "<a href=folder_%d>"
+                                            "<img src=parentFolder_pixels.png "
+                                            "width=%d height=%d"
+                                            " style='%s %s' "
+                                            "><br>%s"
+                                            "</a></td>\n", 
+                                            s.folderID,
+                                            thisW, thisH, style, borderStyle,
+                                            d.f->name );
+                        }
+                    else {
+                        // a folder link
+                        line = autoSprintf( "<td align=center valign=middle>"
+                                            "<a href=folder_%d>"
+                                            "<img src=subFolder_pixels.png "
+                                            "width=%d height=%d"
+                                            " style='%s %s' "
+                                            "><br>%s"
+                                            "</a></td>\n", 
+                                            s.folderID,
+                                            thisW, thisH, style, borderStyle,
+                                            d.f->name );
+                        }
                     inOutputStream->writeString( line );
                     delete [] line;
                     delete [] borderStyle;
@@ -257,58 +410,95 @@ class SlidePageGenerator : public PageGenerator {
 
 
 
+void processFile( File *f, int inFileID, int inFolderID ) {
+    char *name = f->getFileName();
+    
+    FileInputStream stream( f );
+    
+    Image *image = NULL;
+    
+    printf( "Opening file %s\n", name );
+    
+    char isJPEG = false;
+    
+    if( strstr( name, ".png" ) != NULL ) {
+        PNGImageConverter converter;    
+        image = converter.deformatImage( &stream );
+        }
+    else if( strstr( name, ".jpg" ) != NULL ) {
+        JPEGImageConverter converter( 90 );
+        image = converter.deformatImage( &stream );
+        isJPEG = true;
+        }
+        
+        
+    if( image != NULL ) {    
+        SlideImage s;
+        s.id = inFileID;
+        s.folderID = inFolderID;
+        
+        s.sourceFile = f;
+        s.sprite = fillSprite( image, false );
+        s.w = image->getWidth();
+        s.h = image->getHeight();
+            
+        s.pixelArt = false;
+        s.isJPEG = isJPEG;
+            
+        if( strstr( name, "_pixels" ) != NULL ) {
+            s.pixelArt = true;
+            }
+
+        delete image;
+            
+        slides.push_back( s );
+        }
+        
+    delete [] name;
+    }
+
+
+
 
 void initSlides() {
-    
     int numFiles;
     File **childFiles = slidesDir.getChildFiles( &numFiles );
+
+    int nextFileID = 0;
+    int nextFolderID = 0;
 
     for( int i=0; i<numFiles; i++ ) {
         
         File *f = childFiles[i];
 
-        char *name = f->getFileName();
-
-        FileInputStream stream( f );
-
-        Image *image = NULL;
-
-        printf( "Opening file %s\n", name );
-        
-        char isJPEG = false;
-        
-        if( strstr( name, ".png" ) != NULL ) {
-            PNGImageConverter converter;    
-            image = converter.deformatImage( &stream );
-            }
-        else if( strstr( name, ".jpg" ) != NULL ) {
-            JPEGImageConverter converter( 90 );
-            image = converter.deformatImage( &stream );
-            isJPEG = true;
-            }
-        
-        
-        if( image != NULL ) {    
-            SlideImage s;
-            s.id = i;
-            s.sourceFile = f;
-            s.sprite = fillSprite( image, false );
-            s.w = image->getWidth();
-            s.h = image->getHeight();
+        if( f->isDirectory() ) {
             
-            s.pixelArt = false;
-            s.isJPEG = isJPEG;
+            SubFolder sub = { nextFolderID, f->getFileName() };
+            nextFolderID++;
+
+            folders.push_back( sub );
             
-            if( strstr( name, "_pixels" ) != NULL ) {
-                s.pixelArt = true;
+            int numSubFiles;
+            File **subChildFiles = f->getChildFiles( &numSubFiles );
+
+            for( int s=0; s<numSubFiles; s++ ) {
+                File *subF = subChildFiles[s];
+                
+                if( ! subF->isDirectory() ) {
+                    processFile( subF, nextFileID, sub.id );
+                    nextFileID++;
+                    }
+                else {
+                    delete subF;
+                    }
                 }
-
-            delete image;
-            
-            slides.push_back( s );
+            delete [] subChildFiles;
+            delete f;
             }
-        
-        delete [] name;
+        else {
+            processFile( f, nextFileID, -1 );
+            nextFileID++;
+            }
         }
     
     delete [] childFiles;
@@ -332,6 +522,12 @@ void freeSlides() {
         }
     slides.deleteAll();
 
+    for( int i=0; i<folders.size(); i++ ) {
+        SubFolder f = folders.getElementDirect( i );
+        delete [] f.name;
+        }
+    folders.deleteAll();
+    
     delete server;
     }
 
