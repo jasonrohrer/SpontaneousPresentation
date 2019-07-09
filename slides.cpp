@@ -9,7 +9,10 @@
 #include "minorGems/graphics/converters/JPEGImageConverter.h"
 
 
-static int nextSlideID = 0;
+static int startingSlideID = 0;
+
+
+static int nextSlideID = -1;
 
 static int curFolderID = -1;
 
@@ -487,10 +490,12 @@ void processFile( File *f, int inFileID, int inFolderID ) {
 
 
 void initSlides() {
+    startingSlideID = SettingsManager::getIntSetting( "startingSlideID", 0 );
+    
     int numFiles;
     File **childFiles = slidesDir.getChildFiles( &numFiles );
 
-    int nextFileID = 0;
+    int nextFileID = startingSlideID;
     int nextFolderID = 0;
 
     for( int i=0; i<numFiles; i++ ) {
@@ -528,6 +533,11 @@ void initSlides() {
         }
     
     delete [] childFiles;
+
+
+    // save for next time, so we always use fresh IDs to avoid
+    // browser caching between runs if images are changing
+    SettingsManager::setSetting( "startingSlideID", nextFileID );
 
     
     int port = SettingsManager::getIntSetting( "port", 8080 );
