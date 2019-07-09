@@ -212,10 +212,36 @@ class SlidePageGenerator : public PageGenerator {
                 imageMaxH -= 2 * ( cellPadding + imBorder );
 
                 inOutputStream->writeString( 
-                    "<html><body bgcolor=black "
-                    "link=white alink=yellow vlink=white>" );
+                    "<html><head><script>"
+#include "clockScript.js"
+                    "</script></head>"
+                    "<body bgcolor=black "
+                    "onload=\"showTime()\""
+                    "text=white link=white alink=yellow vlink=white>" );
                 inOutputStream->writeString( "<center>" );
 
+                if( SettingsManager::getIntSetting( "showClock", 1 ) ) {
+                    
+                    inOutputStream->writeString( 
+                        "<div style=\"position:absolute; left: 50%;"
+                        "     pointer-events:none;\">"
+                        "<div id=\"MyClockDisplay\" "
+                        "style=\"position:relative; left: -50%;"
+                        "pointer-events:none;"
+                        "opacity: 0.75; "
+                        "font-size: 60px; "
+                        "color: #FFAAAA; "
+                        "text-shadow: "
+                        "3px 3px 0 #000,"
+                        "3px 0px 0 #000,"
+                        "-3px 0px 0 #000,"
+                        "0px 3px 0 #000,"
+                        "0px -3px 0 #000,"
+                        "-3px 3px 0 #000,"
+                        "3px -3px 0 #000,"
+                        "-3px -3px 0 #000;\"></div></div>" );
+                    }
+                
                 char *tableString = autoSprintf( "<table border = 1 "
                                                  "cellspacing=0 cellpadding=%d "
                                                  "width=%d height=%d>\n",
